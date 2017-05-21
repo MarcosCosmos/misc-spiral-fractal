@@ -19,15 +19,24 @@
                 align-items: center;
                 justify-content: center;
             }
-            #canvas{
+            #MainCanvas{
                 flex: 0 0 auto;
                 padding: 10px;
                 vertical-align: top;
                 box-sizing: border-box;
             }
+            #BGCanvas {
+                position: absolute;
+                z-index: -1;
+                top:0;
+                left:0;
+                height:100%;
+                width:100%;
+            }
         </style>
     </head>
     <body>
-        <canvas id="canvas"></canvas>
+        <canvas id="MainCanvas"></canvas>
+        <canvas id="BGCanvas"></canvas>
     </body>
 </html>

@@ -69,21 +69,47 @@ function hsvToRgb(h, s, v) {
   return [ r * 255, g * 255, b * 255 ];
 }
 
-$(function(){
-    let anchorRatio = 0.999; //how far along the side of the previous shape to draw
-    let target = $('canvas');
+//create perfectly regular shapes by taking advantage of the triganometry!
+function createRegularShape(radius, numSides, initX, initY) {
+    let result = [];
+    let arcSize = (2/numSides)*Math.PI;
 
-        let context = target[0].getContext('2d');
+    let theta = 0;
+    for (let n = 0; n < numSides; ++n) {
+        result.push([initX+(radius*Math.cos(theta)), initY+(radius*Math.sin(theta))]);
+        theta += arcSize;
+    }
+    return result;
+}
+
+/* gaussian random curtesy of http://stackoverflow.com/a/36481059 */
+function randn_bm() {
+    var u = 1 - Math.random(); // Subtraction to flip [0, 1) to (0, 1].
+    var v = 1 - Math.random();
+    return Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
+}
+
+$(function(){
+    let initialAnchorRatio = 0.999; //how far along the side of the previous shape to draw
+    var curFractalId = 0;
     let initWidth = 1000;
     let initHeight = 1000;
-
     let currentColor = [Math.random(), 1.0, 1.0];
+    let initialShape = createRegularShape(Math.min(initWidth, initHeight)/2, 5, initWidth/2, initHeight/2);
 
+    let target = $('canvas');
+    let context = target[0].getContext('2d');
+    var colourSwitch = false;
     let drawLineInNextColor = (x, y) => {
-        currentColor[0] = (currentColor[0] + 1/10000) % 1.0;
+
+        let hueShift = 1.0001/initialShape.length;
+        // let hueShift = 1.0005/initialShape.length * ( colourSwitch ? 1.1 : 1);
+        // let hueShift = 1/initialShape.length;
+        // let hueShift = 0;
+        currentColor[0] = (currentColor[0] + hueShift) % 1.0;
         let currentAsRgb = hsvToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
-        context.fillStyle = 'rgb('+currentAsRgb.join(', ')+')';
         context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
+
         context.lineTo(x, y);
         context.stroke();
 
@@ -92,9 +118,61 @@ $(function(){
         context.moveTo(x,y);
     };
 
+    let waveAnchor = (function() {
+        let currentAnchor = initialAnchorRatio;
+        let goingUp = false;
+        let stepSize = 0.00005;
+        let stepLimit = 100;
+        let curStep = 0;
+        return () => {
+            if(curStep < stepLimit) {
+                colourSwitch = false;
+                // if(curStep > 10) {
+                    if (goingUp) {
+                        currentAnchor += stepSize;
+                    } else {
+                        currentAnchor -= stepSize;
+                    }
+                // }
+                curStep += 1;
+            } else {
+                goingUp = !goingUp;
 
+                if (!goingUp) {
+                    colourSwitch = true;
+                }
+                curStep = 0;
+            }
+            if (currentAnchor < 0) {
+                currentAnchor += 1;
+            } else if (currentAnchor > 1) {
+                currentAnchor -= 1;
+            }
+            return currentAnchor;
+        };
+    })();
 
-    let generateFractalFrame = (id, prevShape) => {
+    let flippingAnchor = (function() {
+        let currentAnchor = initialAnchorRatio;
+        let goingUp = false;
+        let stepLimit = 500;
+        let curStep = 0;
+        return () => {
+            if(curStep < stepLimit) {
+                curStep += 1;
+            } else {
+                curStep = 0;
+                currentAnchor = 1-currentAnchor;
+            }
+            return currentAnchor;
+        };
+    })();
+
+    //returns whether or not to continue
+    let drawSubShape = (prevShape) => {
+        //.999/.001 is roughly the limit for avoiding rounding issues
+        // let currentAnchorRatio = waveAnchor();
+        let currentAnchorRatio = initialAnchorRatio;
         let newShape = [];
         let xDiff;
         let yDiff;
@@ -102,8 +180,8 @@ $(function(){
             let nextIdx = curIdx < prevShape.length-1 ? curIdx+1 : 0;
             xDiff = prevShape[nextIdx][0] - prevShape[curIdx][0];
             yDiff = prevShape[nextIdx][1] - prevShape[curIdx][1];
-            let newXDiff = xDiff*anchorRatio;
-            let newYDiff = yDiff*anchorRatio;
+            let newXDiff = xDiff*currentAnchorRatio;
+            let newYDiff = yDiff*currentAnchorRatio;
 
             let nextX = prevShape[curIdx][0]+newXDiff;
             let nextY = prevShape[curIdx][1]+newYDiff;
@@ -116,25 +194,27 @@ $(function(){
 
         drawLineInNextColor(newShape[0][0], newShape[0][1]);
 
-        if ((Math.abs(xDiff) > 1 || Math.abs(yDiff) > 1) && id == curFractalId) {
-            window.requestAnimationFrame(() => generateFractalFrame(id, newShape));
+        if ((Math.abs(xDiff) > 1 || Math.abs(yDiff) > 1)) {
+            return newShape;
+        } else {
+            return null;
         }
     };
+    // //rectangle
+    // let initialShape = [
+    //     [100, 300],
+    //     [100, 700],
+    //     [900, 700],
+    //     [900, 300]
+    // ];
 
-    let initialShape = [
-        [0,0],
-        [0,1000],
-        [1000,1000],
-        [1000, 0]
-    ];
-    var curFractalId = 0;
 
     let drawFractal = () => {
         curFractalId = curFractalId + 1 % 1000; //so that it doesn't bug out/overflow; more than 1000 highly rapid async resizes would likely crash anyway?
         window.requestAnimationFrame(() => {
 
             context.clearRect(0,0,initWidth,initHeight)
-
+            context.beginPath();
             context.moveTo(initialShape[0][0], initialShape[0][1]);
 
             for(let i = 1; i < initialShape.length; ++i) {
@@ -143,7 +223,24 @@ $(function(){
 
             drawLineInNextColor(initialShape[0][0], initialShape[0][1]);
 
-            window.requestAnimationFrame(() => {generateFractalFrame(curFractalId, initialShape)});
+            let drawShapesPerFrame = (id, prevShape) => {
+                window.requestAnimationFrame(
+                    () => {
+                        let eachShape = prevShape;
+                        for (let i = 0; eachShape && i < eachShape.length; ++i) {
+                            eachShape = drawSubShape(eachShape);
+                        }
+                        if (eachShape && id == curFractalId) {
+                            drawShapesPerFrame(id, eachShape);
+                        } else {
+                            // context.beginPath();
+                            // drawShapesPerFrame(id, initialShape);
+                        }
+                    }
+                );
+            };
+
+            drawShapesPerFrame(curFractalId, initialShape);
         });
     };
 
