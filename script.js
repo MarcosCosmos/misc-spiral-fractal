@@ -163,34 +163,41 @@ function randn_bm() {
 }
 
 $(function(){
-    let initialAnchorRatio = 0.999; //how far along the side of the previous shape to draw
+    let initialAnchorRatio = 0.99; //how far along the side of the previous shape to draw
     var curFractalId = 0;
     let initWidth = 1000;
     let initHeight = 1000;
     let currentColor = [Math.random(), 1.0, 1.0];
-    let initialShape = createRegularShape(Math.min(initWidth, initHeight)/2, 5, initWidth/2, initHeight/2);
+    let initialShape = createRegularShape(Math.min(initWidth, initHeight)/2, 7, initWidth/2, initHeight/2);
 
     let target = $('canvas');
     let context = target[0].getContext('2d');
     var colourSwitch = false;
 
     let lineCount = 0;
-    // let hueShift = 1.0001/initialShape.length;
+    // let hueShift = 1.01/initialShape.length;
     // let hueShift = 1.00006/initialShape.length * ( colourSwitch ? 1.1 : 1);
     // let hueShift = 1/initialShape.length;
     // let hueShift = 0;
-    let hueShift = 1/(2*initialShape.length*1000);
+    let hueShift = 1/(2.15*initialShape.length*100);
+
+    let startLineAt = (x, y) => {
+        context.beginPath();
+        context.moveTo(x,y);
+    }
+
     let drawLineInNextColor = (x, y) => {
-        if (lineCount % initialShape.length == 0) {
+
+        // currentColor[0] = (currentColor[0] + hueShift) % 1.0;
+        if (lineCount % (initialShape.length+1) == 0) {
             currentColor[0] = (currentColor[0] + hueShift) % 1.0;
         }
 
         // if (lineCount % (initialShape.length*100) == 0) {
         //     hueShift = -hueShift;
         // }
-
-
         let currentAsRgb = hsvToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
+
         context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
 
         context.lineTo(x, y);
@@ -198,8 +205,7 @@ $(function(){
             context.stroke();
         // }
         //set a new path so each is in a different color
-        context.beginPath();
-        context.moveTo(x,y);
+        startLineAt(x, y);
 
         lineCount += 1;
     };
@@ -263,6 +269,7 @@ $(function(){
         let xDiff;
         let yDiff;
         let curIdx = 0; //start pos
+        // startLineAt(prevShape[curIdx][0], prevShape[curIdx][1]);
         for(let i = 0; i < prevShape.length; ++i) {
             let nextIdx = curIdx < prevShape.length-1 ? curIdx+1 : 0;
             xDiff = prevShape[nextIdx][0] - prevShape[curIdx][0];
@@ -302,11 +309,7 @@ $(function(){
     let drawFractal = () => {
         curFractalId = curFractalId + 1 % 1000; //so that it doesn't bug out/overflow; more than 1000 highly rapid async resizes would likely crash anyway?
         window.requestAnimationFrame(() => {
-
-            context.clearRect(0,0,initWidth,initHeight)
-            context.beginPath();
-            context.moveTo(initialShape[0][0], initialShape[0][1]);
-
+            startLineAt(initialShape[0][0], initialShape[0][1]);
             for(let i = 1; i < initialShape.length; ++i) {
                 drawLineInNextColor(initialShape[i][0], initialShape[i][1]);
             }
@@ -325,6 +328,7 @@ $(function(){
                         } else {
                             // context.beginPath();
                             // drawShapesPerFrame(id, initialShape);
+                            drawFractal();
                         }
                     }
                 );
@@ -370,6 +374,11 @@ $(function(){
             context.canvas.width = newWidth;
             context.canvas.height = newHeight;
             context.scale(scaleX, scaleY); /* This is always new canvas height / old canvas height */
+
+            context.clearRect(0,0,initWidth,initHeight)
+            context.beginPath();
+            context.moveTo(initialShape[0][0], initialShape[0][1]);
+
             drawFractal();
             //update the cached size info to match the new stuff
             // width = newWidth;
