@@ -257,7 +257,8 @@ $(function(){
         //     hueShift = -hueShift;
         // }
         let currentAsRgb = hsvToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
-
+        context.beginPath();
+        context.moveTo(a[0], a[1]);
         context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
         drawLine(a, b);
         context.stroke();
@@ -267,8 +268,6 @@ $(function(){
 
     let drawShape = (shape) => {
         //draw the lines
-        context.beginPath();
-        context.moveTo(shape[0][0], shape[0][1]);
         for(let curIdx = 1; curIdx < shape.length; ++curIdx) {
             drawNextLine(shape[curIdx-1], shape[curIdx]);
         }
@@ -303,10 +302,10 @@ $(function(){
     //     drawLine(a,b);
     // };
 
-    drawNextLine = drawLine;
-
-    let drawNextShape = (prevShape) => {
+    let drawShapeInNextColor = (prevShape) => {
         let stuff = generateSubShape(prevShape);
+        context.beginPath();
+        context.moveTo(stuff[0][0][0], stuff[0][0][1]);
         drawShape(stuff[0]);
         context.fill();
         currentColor[0] = (currentColor[0] + hueShift) % 1.0;
@@ -314,7 +313,17 @@ $(function(){
         context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
         context.fillStyle = 'rgb('+currentAsRgb.join(', ')+')';
         return stuff;
-    }
+    };
+
+    drawNextLine = drawLine;
+
+    // let drawNextShape = (prevShape) => {
+    //     let stuff = generateSubShape(prevShape);
+    //     drawShape(stuff[0]);
+    //     return stuff;
+    // };
+
+    let drawNextShape = drawShapeInNextColor;
 
     let drawSpinningFractal = () => {
         curFractalId = curFractalId + 1 % 1000; //so that it doesn't bug out/overflow; more than 1000 highly rapid async resizes would likely crash anyway?
