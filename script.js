@@ -241,7 +241,7 @@ $(function(){
     })();
 
     // let currentColor = [Math.random(), 1.0, 1.0];
-    let currentColor = [Math.random(), 1.0, .5];
+    let currentColor = [Math.random(), 1.0, 1.0];
     let lineCount = 0;
     let calcHueShift = () => (1/(iterationsPerPattern));
     let hueShift = 1/100;
@@ -256,7 +256,7 @@ $(function(){
         // if (lineCount % (initialShape.length*100) == 0) {
         //     hueShift = -hueShift;
         // }
-        let currentAsRgb = hslToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
+        let currentAsRgb = hsvToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
 
         context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
         drawLine(a, b);
@@ -310,7 +310,7 @@ $(function(){
         drawShape(stuff[0]);
         context.fill();
         currentColor[0] = (currentColor[0] + hueShift) % 1.0;
-        let currentAsRgb = hslToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
+        let currentAsRgb = hsvToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
         context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
         context.fillStyle = 'rgb('+currentAsRgb.join(', ')+')';
         return stuff;
