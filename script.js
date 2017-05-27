@@ -167,7 +167,8 @@ $(function(){
     var curFractalId = 0;
     let initWidth = 1000;
     let initHeight = 1000;
-    let currentColor = [Math.random(), 1.0, 1.0];
+    // let currentColor = [Math.random(), 1.0, 1.0];
+    let currentColor = [Math.random(), 1.0, .5];
     let initialShape = createRegularShape(Math.min(initWidth, initHeight)/2, 7, initWidth/2, initHeight/2);
 
     let target = $('canvas');
@@ -179,8 +180,7 @@ $(function(){
     // let hueShift = 1.00006/initialShape.length * ( colourSwitch ? 1.1 : 1);
     // let hueShift = 1/initialShape.length;
     // let hueShift = 0;
-    let hueShift = 1/(2.15*initialShape.length*100);
-
+    let hueShift = 1.016/(1.1556155615561556155615561556155615561556155615561556155615561556*1556);
     let startLineAt = (x, y) => {
         context.beginPath();
         context.moveTo(x,y);
@@ -189,14 +189,14 @@ $(function(){
     let drawLineInNextColor = (x, y) => {
 
         // currentColor[0] = (currentColor[0] + hueShift) % 1.0;
-        if (lineCount % (initialShape.length+1) == 0) {
+        if (lineCount % (initialShape.length) == 0) {
             currentColor[0] = (currentColor[0] + hueShift) % 1.0;
         }
 
         // if (lineCount % (initialShape.length*100) == 0) {
         //     hueShift = -hueShift;
         // }
-        let currentAsRgb = hsvToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
+        let currentAsRgb = hslToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
 
         context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
 
@@ -307,6 +307,7 @@ $(function(){
 
 
     let drawFractal = () => {
+        var iterationCount = 0;
         curFractalId = curFractalId + 1 % 1000; //so that it doesn't bug out/overflow; more than 1000 highly rapid async resizes would likely crash anyway?
         window.requestAnimationFrame(() => {
             startLineAt(initialShape[0][0], initialShape[0][1]);
@@ -320,12 +321,14 @@ $(function(){
                 window.requestAnimationFrame(
                     () => {
                         let eachShape = prevShape;
-                        for (let i = 0; eachShape && i < eachShape.length; ++i) {
+                        for (let i = 0; eachShape && i < 1556; ++i) {
                             eachShape = drawSubShape(eachShape);
+                            iterationCount += 1;
                         }
                         if (eachShape && id == curFractalId) {
                             drawShapesPerFrame(id, eachShape);
                         } else {
+                            console.log('iterations required: ' + iterationCount);
                             // context.beginPath();
                             // drawShapesPerFrame(id, initialShape);
                             drawFractal();
