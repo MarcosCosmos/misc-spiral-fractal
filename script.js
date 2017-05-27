@@ -143,11 +143,11 @@ function hsvToRgb(h, s, v) {
 }
 
 //create perfectly regular shapes by taking advantage of the triganometry!
-function createRegularShape(radius, numSides, initX, initY) {
+function createRegularShape(radius, numSides, initX, initY, initTheta) {
     let result = [];
     let arcSize = (2/numSides)*Math.PI;
 
-    let theta = 0;
+    let theta = initTheta;
     for (let n = 0; n < numSides; ++n) {
         result.push([initX+(radius*Math.cos(theta)), initY+(radius*Math.sin(theta))]);
         theta += arcSize;
@@ -161,54 +161,34 @@ function randn_bm() {
     var v = 1 - Math.random();
     return Math.sqrt( -2.0 * Math.log( u ) ) * Math.cos( 2.0 * Math.PI * v );
 }
+/* frameLimiter curtesy of https://stackoverflow.com/a/19772220 */
+function createFrameLimiter(fps) {
+    var fpsInterval = 1000/fps;
+    var then = false;
+    var throttler = (callback) => {
+        let now = Date.now();
+        let elapsed = now - then;
+        if (elapsed > fpsInterval) {
+            then = now - (elapsed % fpsInterval);
+            callback();
+        } else {
+            requestAnimationFrame(()=>{throttler(callback)});
+        }
+    };
+    return throttler;
+}
 
 $(function(){
+    let throttler = createFrameLimiter(60);
+    let iterationsPerPattern = 0;
     let initialAnchorRatio = 0.99; //how far along the side of the previous shape to draw
     var curFractalId = 0;
     let initWidth = 1000;
     let initHeight = 1000;
-    // let currentColor = [Math.random(), 1.0, 1.0];
-    let currentColor = [Math.random(), 1.0, .5];
-    let initialShape = createRegularShape(Math.min(initWidth, initHeight)/2, 7, initWidth/2, initHeight/2);
+    let numSides = 5;
 
     let target = $('canvas');
     let context = target[0].getContext('2d');
-    var colourSwitch = false;
-
-    let lineCount = 0;
-    // let hueShift = 1.01/initialShape.length;
-    // let hueShift = 1.00006/initialShape.length * ( colourSwitch ? 1.1 : 1);
-    // let hueShift = 1/initialShape.length;
-    // let hueShift = 0;
-    let hueShift = 1.016/(1.1556155615561556155615561556155615561556155615561556155615561556*1556);
-    let startLineAt = (x, y) => {
-        context.beginPath();
-        context.moveTo(x,y);
-    }
-
-    let drawLineInNextColor = (x, y) => {
-
-        // currentColor[0] = (currentColor[0] + hueShift) % 1.0;
-        if (lineCount % (initialShape.length) == 0) {
-            currentColor[0] = (currentColor[0] + hueShift) % 1.0;
-        }
-
-        // if (lineCount % (initialShape.length*100) == 0) {
-        //     hueShift = -hueShift;
-        // }
-        let currentAsRgb = hslToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
-
-        context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
-
-        context.lineTo(x, y);
-        // if (lineCount % (initialShape.length/3) == 0) {
-            context.stroke();
-        // }
-        //set a new path so each is in a different color
-        startLineAt(x, y);
-
-        lineCount += 1;
-    };
 
     let waveAnchor = (function() {
         let currentAnchor = initialAnchorRatio;
@@ -260,85 +240,112 @@ $(function(){
         };
     })();
 
-    //returns whether or not to continue
-    let drawSubShape = (prevShape) => {
-        //.999/.001 is roughly the limit for avoiding rounding issues
-        // let currentAnchorRatio = waveAnchor();
+    // let currentColor = [Math.random(), 1.0, 1.0];
+    let currentColor = [Math.random(), 1.0, .5];
+    let lineCount = 0;
+    let calcHueShift = () => (1/(iterationsPerPattern));
+    let hueShift = 1/100;
+
+    let drawLine = (a, b) => {
+        context.lineTo(b[0], b[1]);
+        lineCount += 1;
+    };
+
+    let drawLineInNextColor = (a, b) => {
+        currentColor[0] = (currentColor[0] + hueShift) % 1.0;
+        // if (lineCount % (initialShape.length*100) == 0) {
+        //     hueShift = -hueShift;
+        // }
+        let currentAsRgb = hslToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
+
+        context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
+        drawLine(a, b);
+        context.stroke();
+    };
+
+    let drawNextLine;
+
+    let drawShape = (shape) => {
+        //draw the lines
+        context.beginPath();
+        context.moveTo(shape[0][0], shape[0][1]);
+        for(let curIdx = 1; curIdx < shape.length; ++curIdx) {
+            drawNextLine(shape[curIdx-1], shape[curIdx]);
+        }
+        drawNextLine(shape[shape.length-1], shape[0]);
+    };
+
+    let generateSubShape = (prevShape) => {
         let currentAnchorRatio = initialAnchorRatio;
         let newShape = [];
         let xDiff;
         let yDiff;
-        let curIdx = 0; //start pos
-        // startLineAt(prevShape[curIdx][0], prevShape[curIdx][1]);
-        for(let i = 0; i < prevShape.length; ++i) {
+        //calculate the lines to draw
+        for(let curIdx = 0; curIdx < prevShape.length; ++curIdx) {
             let nextIdx = curIdx < prevShape.length-1 ? curIdx+1 : 0;
             xDiff = prevShape[nextIdx][0] - prevShape[curIdx][0];
             yDiff = prevShape[nextIdx][1] - prevShape[curIdx][1];
             let newXDiff = xDiff*currentAnchorRatio;
             let newYDiff = yDiff*currentAnchorRatio;
 
-            let nextX = prevShape[curIdx][0]+newXDiff;
-            let nextY = prevShape[curIdx][1]+newYDiff;
-
-            newShape.push([nextX, nextY]);
-
-            //draw the next point
-            drawLineInNextColor(nextX, nextY);
-
-            //step to the next point, cycling back if neccessary
-            curIdx = (curIdx + 1) % prevShape.length;
+            let nextPoint = [
+                prevShape[curIdx][0]+newXDiff,
+                prevShape[curIdx][1]+newYDiff
+            ];
+            newShape.push(nextPoint);
         }
+        return [newShape, (Math.abs(xDiff) > 1 || Math.abs(yDiff) > 1)];
+    }
 
-        drawLineInNextColor(newShape[0][0], newShape[0][1]);
+    // drawNextLine = (a, b) => {
+    //     context.moveTo(a[0], a[1]);
+    //     context.beginPath();
+    //     drawLine(a,b);
+    // };
 
-        if ((Math.abs(xDiff) > 1 || Math.abs(yDiff) > 1)) {
-            return newShape;
-        } else {
-            return null;
-        }
-    };
-    // //rectangle
-    // let initialShape = [
-    //     [100, 300],
-    //     [100, 700],
-    //     [900, 700],
-    //     [900, 300]
-    // ];
+    drawNextLine = drawLine;
 
+    let drawNextShape = (prevShape) => {
+        let stuff = generateSubShape(prevShape);
+        drawShape(stuff[0]);
+        context.fill();
+        currentColor[0] = (currentColor[0] + hueShift) % 1.0;
+        let currentAsRgb = hslToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
+        context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
+        context.fillStyle = 'rgb('+currentAsRgb.join(', ')+')';
+        return stuff;
+    }
 
-    let drawFractal = () => {
-        var iterationCount = 0;
+    let drawSpinningFractal = () => {
         curFractalId = curFractalId + 1 % 1000; //so that it doesn't bug out/overflow; more than 1000 highly rapid async resizes would likely crash anyway?
-        window.requestAnimationFrame(() => {
-            startLineAt(initialShape[0][0], initialShape[0][1]);
-            for(let i = 1; i < initialShape.length; ++i) {
-                drawLineInNextColor(initialShape[i][0], initialShape[i][1]);
-            }
-
-            drawLineInNextColor(initialShape[0][0], initialShape[0][1]);
-
-            let drawShapesPerFrame = (id, prevShape) => {
-                window.requestAnimationFrame(
-                    () => {
-                        let eachShape = prevShape;
-                        for (let i = 0; eachShape && i < 1556; ++i) {
-                            eachShape = drawSubShape(eachShape);
-                            iterationCount += 1;
-                        }
-                        if (eachShape && id == curFractalId) {
-                            drawShapesPerFrame(id, eachShape);
-                        } else {
-                            console.log('iterations required: ' + iterationCount);
-                            // context.beginPath();
-                            // drawShapesPerFrame(id, initialShape);
-                            drawFractal();
-                        }
-                    }
-                );
+        let initTheta = 0;
+        let work = () => {
+            let initialShape = createRegularShape(Math.min(initWidth, initHeight)/2, numSides, initWidth/2, initHeight/2, initTheta);
+            let iterationCount = 0;
+            context.clearRect(0,0,initWidth,initHeight);
+            drawShape(initialShape);
+            //draw subShapes until the pattern is finished
+            let eachShape = initialShape;
+            let shouldContinue = true;
+            while (shouldContinue) {
+                let stuff = drawNextShape(eachShape);
+                eachShape = stuff[0];
+                shouldContinue = stuff[1];
+                iterationCount += 1;
             };
-
-            drawShapesPerFrame(curFractalId, initialShape);
-        });
+            if(iterationsPerPattern != iterationCount) {
+                iterationsPerPattern = iterationCount;
+                hueShift = calcHueShift();
+            }
+            currentColor[0] = (currentColor[0] + 5*hueShift) % 1.0;
+            initTheta = (initTheta + (1/360)*(2*Math.PI)) % (2*Math.PI);
+            requestAnimationFrame(
+                () => {
+                    throttler(work);
+                }
+            );
+        };
+        work();
     };
 
     let width = initWidth;
@@ -378,11 +385,9 @@ $(function(){
             context.canvas.height = newHeight;
             context.scale(scaleX, scaleY); /* This is always new canvas height / old canvas height */
 
-            context.clearRect(0,0,initWidth,initHeight)
-            context.beginPath();
-            context.moveTo(initialShape[0][0], initialShape[0][1]);
+            context.clearRect(0,0,initWidth,initHeight);
 
-            drawFractal();
+            drawSpinningFractal();
             //update the cached size info to match the new stuff
             // width = newWidth;
             // height = newHeight;
