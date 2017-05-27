@@ -338,7 +338,7 @@ $(function(){
                 hueShift = calcHueShift();
             }
             currentColor[0] = (currentColor[0] + 5*hueShift) % 1.0;
-            initTheta = (initTheta + (1/360)*(2*Math.PI)) % (2*Math.PI);
+            initTheta = (initTheta - (1/360)*(2*Math.PI)) % (2*Math.PI);
             requestAnimationFrame(
                 () => {
                     throttler(work);
