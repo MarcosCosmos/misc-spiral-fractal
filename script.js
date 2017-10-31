@@ -43,7 +43,7 @@ function rgbToHsl(r, g, b) {
  * Assumes h, s, and l are contained in the set [0, 1] and
  * returns r, g, and b in the set [0, 255].
  *
- * @param   Number  h       The hue
+ * @param   Number  h       The calcHue
  * @param   Number  s       The saturation
  * @param   Number  l       The lightness
  * @return  Array           The RGB representation
@@ -54,7 +54,7 @@ function hslToRgb(h, s, l) {
   if (s == 0) {
     r = g = b = l; // achromatic
   } else {
-    function hue2rgb(p, q, t) {
+    function calcHue2rgb(p, q, t) {
       if (t < 0) t += 1;
       if (t > 1) t -= 1;
       if (t < 1/6) return p + (q - p) * 6 * t;
@@ -66,9 +66,9 @@ function hslToRgb(h, s, l) {
     var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
     var p = 2 * l - q;
 
-    r = hue2rgb(p, q, h + 1/3);
-    g = hue2rgb(p, q, h);
-    b = hue2rgb(p, q, h - 1/3);
+    r = calcHue2rgb(p, q, h + 1/3);
+    g = calcHue2rgb(p, q, h);
+    b = calcHue2rgb(p, q, h - 1/3);
   }
 
   return [ r * 255, g * 255, b * 255 ];
@@ -116,7 +116,7 @@ function rgbToHsv(r, g, b) {
  * Assumes h, s, and v are contained in the set [0, 1] and
  * returns r, g, and b in the set [0, 255].
  *
- * @param   Number  h       The hue
+ * @param   Number  h       The calcHue
  * @param   Number  s       The saturation
  * @param   Number  v       The value
  * @return  Array           The RGB representation
@@ -181,7 +181,7 @@ function createFrameLimiter(fps) {
 $(function(){
     let throttler = createFrameLimiter(60);
     let iterationsPerPattern = 0;
-    let initialAnchorRatio = 0.99; //how far along the side of the previous shape to draw
+    let initialAnchorRatio = 0.999; //how far along the side of the previous shape to draw
     var curFractalId = 0;
     let initWidth = 1000;
     let initHeight = 1000;
@@ -240,38 +240,63 @@ $(function(){
         };
     })();
 
-    // let currentColor = [Math.random(), 1.0, 1.0];
-    let currentColor = [Math.random(), 1.0, 1.0];
+    // let baseColor = [Math.random(), 1.0, 1.0];
+    let baseColor = [Math.random(), 1.0, 1.0];
     let lineCount = 0;
-    let calcHueShift = () => (1/(iterationsPerPattern));
-    let hueShift = 1/100;
 
-    let drawLine = (a, b) => {
+    //NOTE: IMPORTANT: /(numSides-1 is the magic number that helps creates individual swirls because the start point for each spiral shifts to the next side each time)
+
+    //NOTE: IMPORTANT: or /(iterationsPerPattern+numSides-1 is the magic number that helps creates individual swirls because the start point for each spiral shifts to the next side each time)
+
+
+
+    let negateSideShift = (lineNumber) => ((lineNumber+(Math.floor(lineNumber/numSides)%numSides)));
+    let calcHue;
+    let iterationLimitAwareCalcHue = (lineNumber, doNegation, shiftScaler) => {
+        doNegation = typeof(lineNumber) === 'undefined' ? true : doNegation;
+        lineNumber = typeof(lineNumber) === 'undefined' ? lineCount : lineNumber;
+        shiftScaler = typeof(shiftScaler) === 'undefined' ? 1 : shiftScaler;
+        let adjustedLineNumber = doNegation ? negateSideShift(lineNumber) : lineNumber;
+        // let result = (adjustedLineNumber/(numSides*iterationsPerPattern));
+        let result = (((adjustedLineNumber%numSides)/numSides)) + (adjustedLineNumber/(numSides*iterationsPerPattern));
+        result = (baseColor[0] + shiftScaler*result) % 1.0;
+        return result;
+    };
+
+    let basicHue = (lineNumber, doNegation, shiftScaler) => {
+        doNegation = typeof(lineNumber) === 'undefined' ? true : doNegation;
+        lineNumber = typeof(lineNumber) === 'undefined' ? lineCount : lineNumber;
+        shiftScaler = typeof(shiftScaler) === 'undefined' ? 1 : shiftScaler;
+        let adjustedLineNumber = doNegation ? negateSideShift(lineNumber) : lineNumber;
+        let result = (adjustedLineNumber/numSides);
+        result = (baseColor[0] + shiftScaler*esult) % 1.0;
+        return result;
+    };
+
+    calcHue = iterationLimitAwareCalcHue;
+
+    let drawLinePlain = (a, b) => {
         context.lineTo(b[0], b[1]);
         lineCount += 1;
     };
-
+    let temp = 0;
     let drawLineInNextColor = (a, b) => {
-        currentColor[0] = (currentColor[0] + hueShift) % 1.0;
-        // if (lineCount % (initialShape.length*100) == 0) {
-        //     hueShift = -hueShift;
-        // }
-        let currentAsRgb = hsvToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
+        let currentAsRgb = hsvToRgb(calcHue(), baseColor[1], baseColor[2]).map((x) => Math.round(x));
         context.beginPath();
         context.moveTo(a[0], a[1]);
         context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
-        drawLine(a, b);
+        drawLinePlain(a, b);
         context.stroke();
     };
 
-    let drawNextLine;
+    let drawLine;
 
-    let drawShape = (shape) => {
+    let drawShapePlain = (shape) => {
         //draw the lines
         for(let curIdx = 1; curIdx < shape.length; ++curIdx) {
-            drawNextLine(shape[curIdx-1], shape[curIdx]);
+            drawLine(shape[curIdx-1], shape[curIdx]);
         }
-        drawNextLine(shape[shape.length-1], shape[0]);
+        drawLine(shape[shape.length-1], shape[0]);
     };
 
     let generateSubShape = (prevShape) => {
@@ -296,58 +321,96 @@ $(function(){
         return [newShape, (Math.abs(xDiff) > 1 || Math.abs(yDiff) > 1)];
     }
 
-    // drawNextLine = (a, b) => {
+    //redundant iff using drawShapeInNextColor
+    // drawNextLinePlain = (a, b) => {
     //     context.moveTo(a[0], a[1]);
     //     context.beginPath();
-    //     drawLine(a,b);
+    //     drawLinePlain(a,b);
     // };
 
     let drawShapeInNextColor = (prevShape) => {
-        let stuff = generateSubShape(prevShape);
         context.beginPath();
         context.moveTo(stuff[0][0][0], stuff[0][0][1]);
         drawShape(stuff[0]);
         context.fill();
-        currentColor[0] = (currentColor[0] + hueShift) % 1.0;
-        let currentAsRgb = hsvToRgb(currentColor[0], currentColor[1], currentColor[2]).map((x) => Math.round(x));
+        let currentAsRgb = hsvToRgb(calcHue(), baseColor[1], baseColor[2]).map((x) => Math.round(x));
         context.strokeStyle = 'rgb('+currentAsRgb.join(', ')+')';
         context.fillStyle = 'rgb('+currentAsRgb.join(', ')+')';
         return stuff;
     };
 
-    drawNextLine = drawLine;
+    drawLine = drawLineInNextColor;
 
-    // let drawNextShape = (prevShape) => {
-    //     let stuff = generateSubShape(prevShape);
-    //     drawShape(stuff[0]);
-    //     return stuff;
-    // };
+    let drawShape = drawShapePlain;
 
-    let drawNextShape = drawShapeInNextColor;
+    let calcIterationsPerPattern = () => {
+        let initTheta = 0;
+        let initialShape = createRegularShape(Math.min(initWidth, initHeight)/2, numSides, initWidth/2, initHeight/2, initTheta);
+        //calculate subShapes until the pattern is finished
+        let eachShape = initialShape;
+        let shouldContinue = true;
+        let iterationCount = 1;
+        while (shouldContinue) {
+            let stuff = generateSubShape(eachShape);
+            eachShape = stuff[0];
+            shouldContinue = stuff[1];
+            iterationCount += 1;
+        };
+        return iterationCount;
+    };
+
+    let drawFractal;
 
     let drawSpinningFractal = () => {
         curFractalId = curFractalId + 1 % 1000; //so that it doesn't bug out/overflow; more than 1000 highly rapid async resizes would likely crash anyway?
         let initTheta = 0;
         let work = () => {
             let initialShape = createRegularShape(Math.min(initWidth, initHeight)/2, numSides, initWidth/2, initHeight/2, initTheta);
-            let iterationCount = 0;
+            context.clearRect(0,0,initWidth,initHeight);
+            drawShape(initialShape);
+            //calculate subShapes until the pattern is finished
+            let eachShape = initialShape;
+            let shouldContinue = true;
+            while (shouldContinue) {
+                let stuff = generateSubShape(eachShape);
+                eachShape = stuff[0];
+                shouldContinue = stuff[1];
+                drawShape(eachShape);
+            };
+
+            initTheta = (initTheta + (1/360)*(2*Math.PI)) % (2*Math.PI);
+            iterationsPerPattern = calcIterationsPerPattern();
+            baseColor[0] = (calcHue((numSides-1))) % 1.0;
+            setTimeout( function() {
+                requestAnimationFrame(
+                    () => {
+                        throttler(work);
+                    }
+                );
+            }, 0);
+        };
+        work();
+    };
+
+    let drawStaticFractal = () => {
+        curFractalId = curFractalId + 1 % 1000; //so that it doesn't bug out/overflow; more than 1000 highly rapid async resizes would likely crash anyway?
+        let initTheta = 0;
+        let work = () => {
+            let initialShape = createRegularShape(Math.min(initWidth, initHeight)/2, numSides, initWidth/2, initHeight/2, initTheta);
             context.clearRect(0,0,initWidth,initHeight);
             drawShape(initialShape);
             //draw subShapes until the pattern is finished
             let eachShape = initialShape;
             let shouldContinue = true;
             while (shouldContinue) {
-                let stuff = drawNextShape(eachShape);
+                let stuff = generateSubShape(eachShape);
                 eachShape = stuff[0];
                 shouldContinue = stuff[1];
-                iterationCount += 1;
+                drawShape(eachShape);
             };
-            if(iterationsPerPattern != iterationCount) {
-                iterationsPerPattern = iterationCount;
-                hueShift = calcHueShift();
-            }
-            currentColor[0] = (currentColor[0] + 5*hueShift) % 1.0;
-            initTheta = (initTheta - (1/360)*(2*Math.PI)) % (2*Math.PI);
+
+
+            baseColor[0] = (calcHue(0.975*(numSides-1))) % 1.0;
             requestAnimationFrame(
                 () => {
                     throttler(work);
@@ -356,6 +419,8 @@ $(function(){
         };
         work();
     };
+
+    drawFractal = drawStaticFractal;
 
     let width = initWidth;
     let height = initHeight;
@@ -370,7 +435,7 @@ $(function(){
             let scaleX, scaleY;
             if (maxHeight != height || maxWidth != width) {
                 let ratio = 0; // Used for aspect ratio
-
+numSides
                 if (maxWidth < maxHeight) {
                     let ratio = maxWidth / initWidth;
                     newWidth = maxWidth;
@@ -396,7 +461,12 @@ $(function(){
 
             context.clearRect(0,0,initWidth,initHeight);
 
-            drawSpinningFractal();
+            //if we need to calculate the number of iterations per full shape/pattern, do it first
+            if (calcHue == iterationLimitAwareCalcHue) {
+                iterationsPerPattern = calcIterationsPerPattern();
+            }
+
+            drawFractal();
             //update the cached size info to match the new stuff
             // width = newWidth;
             // height = newHeight;
