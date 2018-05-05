@@ -181,11 +181,12 @@ function createFrameLimiter(fps) {
 $(function(){
     let throttler = createFrameLimiter(60);
     let iterationsPerPattern = 0;
-    let initialAnchorRatio = 0.999; //how far along the side of the previous shape to draw
+    let initialAnchorRatio = 0.001; //how far along the side of the previous shape to draw
+    let runContinously = true;
     var curFractalId = 0;
-    let initWidth = 1000;
-    let initHeight = 1000;
-    let numSides = 5;
+    let initWidth = 1920;
+    let initHeight = 1080;
+    let numSides = 3;
 
     let target = $('canvas');
     let context = target[0].getContext('2d');
@@ -193,9 +194,10 @@ $(function(){
     let waveAnchor = (function() {
         let currentAnchor = initialAnchorRatio;
         let goingUp = false;
-        let stepSize = 0.00005;
-        let stepLimit = 100;
+        let stepSize = 0.15;
+        let stepLimit = 2;
         let curStep = 0;
+        let colourSwitch = false;
         return () => {
             if(curStep < stepLimit) {
                 colourSwitch = false;
@@ -253,7 +255,7 @@ $(function(){
     let negateSideShift = (lineNumber) => ((lineNumber+(Math.floor(lineNumber/numSides)%numSides)));
     let calcHue;
     let iterationLimitAwareCalcHue = (lineNumber, doNegation, shiftScaler) => {
-        doNegation = typeof(lineNumber) === 'undefined' ? true : doNegation;
+        doNegation = typeof(lineNumber) === 'undefined' ? false : doNegation;
         lineNumber = typeof(lineNumber) === 'undefined' ? lineCount : lineNumber;
         shiftScaler = typeof(shiftScaler) === 'undefined' ? 1 : shiftScaler;
         let adjustedLineNumber = doNegation ? negateSideShift(lineNumber) : lineNumber;
@@ -269,7 +271,7 @@ $(function(){
         shiftScaler = typeof(shiftScaler) === 'undefined' ? 1 : shiftScaler;
         let adjustedLineNumber = doNegation ? negateSideShift(lineNumber) : lineNumber;
         let result = (adjustedLineNumber/numSides);
-        result = (baseColor[0] + shiftScaler*esult) % 1.0;
+        result = (baseColor[0] + shiftScaler*result) % 1.0;
         return result;
     };
 
@@ -364,6 +366,7 @@ $(function(){
     let drawSpinningFractal = () => {
         curFractalId = curFractalId + 1 % 1000; //so that it doesn't bug out/overflow; more than 1000 highly rapid async resizes would likely crash anyway?
         let initTheta = 0;
+        let oldBaseColor = baseColor[0];
         let work = () => {
             let initialShape = createRegularShape(Math.min(initWidth, initHeight)/2, numSides, initWidth/2, initHeight/2, initTheta);
             context.clearRect(0,0,initWidth,initHeight);
@@ -371,7 +374,7 @@ $(function(){
             //calculate subShapes until the pattern is finished
             let eachShape = initialShape;
             let shouldContinue = true;
-            while (shouldContinue) {
+            while(shouldContinue) {
                 let stuff = generateSubShape(eachShape);
                 eachShape = stuff[0];
                 shouldContinue = stuff[1];
@@ -380,17 +383,22 @@ $(function(){
 
             initTheta = (initTheta + (1/360)*(2*Math.PI)) % (2*Math.PI);
             iterationsPerPattern = calcIterationsPerPattern();
-            baseColor[0] = (calcHue((numSides-1))) % 1.0;
-            setTimeout( function() {
-                requestAnimationFrame(
-                    () => {
-                        throttler(work);
-                    }
-                );
-            }, 0);
+            baseColor[0] = oldBaseColor;
+            baseColor[0] = (oldBaseColor - 1/360) % 1.0;
+            oldBaseColor = baseColor[0];
+            if(runContinously) {
+                setTimeout( function() {
+                    requestAnimationFrame(
+                        () => {
+                            throttler(work);
+                        }
+                    );
+                }, 0);
+            }
         };
         work();
     };
+    // let frameCount = 0;
 
     let drawStaticFractal = () => {
         curFractalId = curFractalId + 1 % 1000; //so that it doesn't bug out/overflow; more than 1000 highly rapid async resizes would likely crash anyway?
@@ -410,17 +418,22 @@ $(function(){
             };
 
 
-            baseColor[0] = (calcHue(0.975*(numSides-1))) % 1.0;
-            requestAnimationFrame(
-                () => {
-                    throttler(work);
-                }
-            );
+            if(runContinously) {
+                baseColor[0] = (calcHue(-1/60)) % 1.0;
+                requestAnimationFrame(
+                    () => {
+                        throttler(work);
+                    }
+                );
+            }
+            // frameCount += 1;
+            //
+            // console.log(frameCount);
         };
         work();
     };
 
-    drawFractal = drawStaticFractal;
+    drawFractal = drawSpinningFractal;
 
     let width = initWidth;
     let height = initHeight;
@@ -435,7 +448,6 @@ $(function(){
             let scaleX, scaleY;
             if (maxHeight != height || maxWidth != width) {
                 let ratio = 0; // Used for aspect ratio
-numSides
                 if (maxWidth < maxHeight) {
                     let ratio = maxWidth / initWidth;
                     newWidth = maxWidth;
